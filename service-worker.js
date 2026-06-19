@@ -1,5 +1,6 @@
-// Bump CACHE when you change app files so phones pick up the new version.
-const CACHE = "lakehouse-v5";
+// Network-first: deployed changes always show up on reload; cache is only a
+// fallback for when you're offline. Bump CACHE if you ever need a hard reset.
+const CACHE = "lakehouse-v6";
 const SHELL = [
   "./",
   "./index.html",
@@ -17,24 +18,23 @@ self.addEventListener("install", (e) => {
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  // Only handle our own static files. Let Supabase / fonts / CDN go straight to network.
-  if (url.origin !== self.location.origin) return;
+  if (url.origin !== self.location.origin) return; // Supabase / fonts / CDN go straight to network
   if (e.request.method !== "GET") return;
   e.respondWith(
-    caches.match(e.request).then((cached) =>
-      cached ||
-      fetch(e.request).then((res) => {
+    fetch(e.request)
+      .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
         return res;
-      }).catch(() => caches.match("./index.html"))
-    )
+      })
+      .catch(() => caches.match(e.request).then((cached) => cached || caches.match("./index.html")))
   );
 });
