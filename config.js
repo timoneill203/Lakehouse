@@ -6,5 +6,5 @@
 // These are safe to ship in a static site; the anon key is meant to be public.
 // Access is controlled by the table policies in schema.sql.
 
-export const SUPABASE_URL = "https://YOUR-PROJECT-ID.supabase.co";
-export const SUPABASE_ANON_KEY = "YOUR-ANON-PUBLIC-KEY";
+export const SUPABASE_URL = https://xagbzmxtqltkkgnswzkn.supabase.co/rest/v1/;
+export const SUPABASE_ANON_KEY = sb_publishable_m0y_FrwtC56RaUgK9GyWWQ_RxQ0mZ7_;
