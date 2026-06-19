@@ -125,8 +125,8 @@ body{min-height:100vh;background:radial-gradient(120% 55% at 50% -8%,#F3ECDA 0%,
 .lock-card h1{font-family:'Fraunces',serif;font-weight:800;font-size:28px;margin:0;letter-spacing:-.02em;color:var(--ink)}
 .lock-card p{color:var(--muted);font-size:14px;margin:6px 0 20px}
 .lock-card form{display:block}
-.lock-card input[type=password]{width:100%;font:inherit;font-size:16px;text-align:center;letter-spacing:.04em;border:1px solid var(--line);border-radius:11px;padding:13px;background:#fff;color:var(--ink)}
-.lock-card input[type=password]:focus{outline:2px solid var(--amber);outline-offset:1px;border-color:transparent}
+.lock-card #lockpw{width:100%;font:inherit;font-size:16px;text-align:center;letter-spacing:.04em;border:1px solid var(--line);border-radius:11px;padding:13px;background:#fff;color:var(--ink)}
+.lock-card #lockpw:focus{outline:2px solid var(--amber);outline-offset:1px;border-color:transparent}
 .lock-err{color:#A4432A;font-size:13px;font-weight:500;margin-top:10px;min-height:18px}
 .lock-card button{width:100%;font:inherit;font-weight:700;font-size:15px;border:none;border-radius:11px;padding:13px;margin-top:6px;background:var(--amber);color:var(--ink);cursor:pointer}
 .lock-card button:active{transform:translateY(1px)}
@@ -166,3 +166,8 @@ body{min-height:100vh;background:radial-gradient(120% 55% at 50% -8%,#F3ECDA 0%,
 .sc-exp .ic.c{background:rgba(221,154,72,.20);color:#9a6320}
 .sc-exp .tx b{display:block;font-size:15px;font-weight:600;font-family:'Fraunces',serif}
 .sc-exp .tx small{display:block;font-size:12.5px;color:var(--muted);margin-top:2px;font-weight:400}
+
+/* show-password toggle */
+.lock-pwwrap{position:relative}
+.lock-pwwrap #lockpw{padding-right:64px}
+.lock-show{position:absolute;right:8px;top:50%;transform:translateY(-50%);font:inherit;font-size:13px;font-weight:600;border:none;background:transparent;color:var(--water);cursor:pointer;padding:6px 8px}
