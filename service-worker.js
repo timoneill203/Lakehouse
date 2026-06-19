@@ -1,5 +1,5 @@
 // Bump CACHE when you change app files so phones pick up the new version.
-const CACHE = "lakehouse-v4";
+const CACHE = "lakehouse-v5";
 const SHELL = [
   "./",
   "./index.html",
