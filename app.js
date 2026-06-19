@@ -655,10 +655,8 @@ function renderLock() {
       <p>Enter the house password</p>
       <form id="lockform" autocomplete="on">
         <input type="text" name="username" autocomplete="username" value="Pleasant Lake House" readonly aria-hidden="true" class="lock-hidden" tabindex="-1">
-        <div class="lock-pwwrap">
-          <input type="password" id="lockpw" name="password" autocomplete="current-password" placeholder="Password" autofocus>
-          <button type="button" class="lock-show" id="lockshow" aria-label="Show password">Show</button>
-        </div>
+        <input type="password" id="lockpw" name="password" autocomplete="current-password" placeholder="Password" autofocus>
+        <label class="lock-showrow"><input type="checkbox" id="lockshow"> Show password</label>
         <div class="lock-err" id="lockerr"></div>
         <button type="submit">Unlock</button>
       </form>
@@ -676,12 +674,9 @@ function renderLock() {
   });
   const pwEl = document.getElementById("lockpw");
   if (pwEl) pwEl.focus();
-  const showBtn = document.getElementById("lockshow");
-  if (showBtn) showBtn.addEventListener("click", () => {
-    const hidden = pwEl.type === "password";
-    pwEl.type = hidden ? "text" : "password";
-    showBtn.textContent = hidden ? "Hide" : "Show";
-    pwEl.focus();
+  const showBox = document.getElementById("lockshow");
+  if (showBox) showBox.addEventListener("change", () => {
+    pwEl.type = showBox.checked ? "text" : "password";
   });
 }
 
