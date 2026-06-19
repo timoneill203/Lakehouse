@@ -2,11 +2,25 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 
 // ───────────────────────── setup ─────────────────────────
+const _url = SUPABASE_URL.replace(/\/$/, "");
 const CONFIGURED =
-  SUPABASE_URL && !SUPABASE_URL.includes("YOUR-PROJECT-ID") &&
+  _url && !_url.includes("YOUR-PROJECT-ID") &&
   SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes("YOUR-ANON");
 
-const sb = CONFIGURED ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const sb = CONFIGURED ? createClient(_url, SUPABASE_ANON_KEY) : null;
+
+// ───────────────────────── persistent unlock ─────────────────────────
+const UNLOCK_KEY = "lh_unlock_ts";
+const UNLOCK_TTL = 365 * 24 * 60 * 60 * 1000; // 365 days — effectively never
+const PASSWORD = "1crazygrampS";
+
+function isUnlocked() {
+  const ts = localStorage.getItem(UNLOCK_KEY);
+  return ts && (Date.now() - parseInt(ts, 10)) < UNLOCK_TTL;
+}
+function setUnlocked() {
+  localStorage.setItem(UNLOCK_KEY, Date.now().toString());
+}
 
 // ───────────────────────── date helpers ─────────────────────────
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -607,8 +621,6 @@ function openStayForm(editing, prefillStart) {
 }
 
 // ───────────────────────── password gate + boot ─────────────────────────
-const PASSWORD = "pleasantlake";
-
 function boot() {
   render();
   loadAll();
@@ -653,7 +665,7 @@ function renderLock() {
     e.preventDefault();
     const pw = document.getElementById("lockpw").value;
     if (pw === PASSWORD) {
-      localStorage.setItem("lh_unlocked", "1");
+      setUnlocked();
       boot();
     } else {
       document.getElementById("lockerr").textContent = "That's not the house password.";
@@ -663,5 +675,5 @@ function renderLock() {
   if (pwEl) pwEl.focus();
 }
 
-if (localStorage.getItem("lh_unlocked") === "1") boot();
+if (isUnlocked()) boot();
 else renderLock();
