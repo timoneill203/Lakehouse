@@ -20,6 +20,22 @@ body{min-height:100vh;background:radial-gradient(120% 55% at 50% -8%,#F3ECDA 0%,
 .sc-toggle{display:inline-flex;background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:3px}
 .sc-toggle button{font:inherit;font-weight:600;font-size:14px;border:none;background:transparent;color:var(--muted);padding:8px 14px;border-radius:8px;cursor:pointer}
 .sc-toggle button.on{background:var(--water);color:#fff}
+/* recent bookings — sticky card */
+.sc-recent-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:11px 13px 12px;margin:10px 2px 4px;box-shadow:0 4px 14px rgba(21,48,44,.07)}
+.sc-recent-card.collapsed{padding-bottom:11px}
+.sc-recent-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sc-recent-title{font-family:'Fraunces',serif;font-weight:700;font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:var(--water-deep);display:flex;align-items:center}
+.sc-recent-count{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;padding:0 6px;margin-left:8px;border-radius:10px;background:var(--rust);color:#fff;font-family:Inter,sans-serif;font-size:11.5px;font-weight:700;letter-spacing:0;line-height:1}
+.sc-recent-toggle{font:inherit;font-size:12.5px;font-weight:600;border:none;background:transparent;color:var(--cedar);cursor:pointer;text-decoration:underline;padding:2px 2px}
+.sc-recent-strip{display:flex;gap:9px;overflow-x:auto;margin-top:10px;padding-bottom:3px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.sc-recent-item{flex:0 0 auto;width:178px;text-align:left;background:#fff;border:1px solid var(--line);border-radius:11px;padding:9px 11px;cursor:pointer;font:inherit;color:inherit;display:flex;flex-direction:column;gap:5px}
+.sc-recent-item:hover{border-color:var(--water)}
+.sc-recent-item:active{transform:translateY(1px)}
+.ri-top{display:flex;align-items:center;gap:7px}
+.ri-when{font-family:'Fraunces',serif;font-weight:700;font-size:14px;letter-spacing:-.01em;line-height:1.1}
+.ri-names{display:flex;flex-wrap:wrap;gap:4px}
+.ri-meta{font-size:11.5px;color:var(--muted);font-style:italic;margin-top:1px}
+.sc-newdot{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.07em;color:#fff;background:var(--rust);padding:2px 6px;border-radius:5px;vertical-align:middle;font-family:Inter,sans-serif;flex:0 0 auto}
 .sc-add{font:inherit;font-weight:600;font-size:14px;border:none;border-radius:10px;padding:10px 16px;background:var(--amber);color:var(--ink);cursor:pointer}
 .sc-add:active{transform:translateY(1px)}
 
