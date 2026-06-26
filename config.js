@@ -8,3 +8,13 @@
 
 export const SUPABASE_URL = "https://xagbzmxtqltkkgnswzkn.supabase.co";
 export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhZ2J6bXh0cWx0a2tnbnN3emtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NTA4MzksImV4cCI6MjA5NzQyNjgzOX0.k3FffoglIg048wU0freGqtuAk7VvKS73mDNWJbTiQIA";
+
+// ── Weather (optional) ───────────────────────────────────────────────
+// The lake's location, used to show a small weather icon on each stay.
+// Get coordinates by right-clicking your lake in Google Maps — the popup
+// shows latitude, then longitude. Forecasts come from Open-Meteo
+// (open-meteo.com), a free, open-source weather API — no key needed.
+// Set both to null to turn weather off.
+export const LAKE_LAT = 43.1009;
+export const LAKE_LON = -74.77293;
+export const LAKE_LABEL = "Dolgeville, NY";
