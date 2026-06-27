@@ -43,6 +43,14 @@ body{min-height:100vh;background:radial-gradient(120% 55% at 50% -8%,#F3ECDA 0%,
 .sc-pill{font-size:10.5px;font-weight:600;line-height:1.15;padding:2px 5px;border-radius:5px;border-left:2.5px solid;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sc-more{font-size:10px;color:var(--muted);font-weight:600;padding-left:3px}
 
+/* weather icons */
+.wx{display:inline-flex;align-items:center;justify-content:center;line-height:0;vertical-align:middle;flex:0 0 auto}
+.wx svg{display:block;width:100%;height:100%;overflow:visible}
+.wx-cal{width:15px;height:15px;opacity:.92}
+.wx-row{width:19px;height:19px}
+.sc-rwhen .wx-row{margin-right:7px;position:relative;top:-1px}
+.sc-dhead{gap:2px}
+
 .sc-list{margin-top:8px}
 .sc-month{display:flex;align-items:center;gap:12px;margin:22px 4px 10px}
 .sc-month h2{font-family:'Fraunces',serif;font-weight:700;font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--water-deep);margin:0;white-space:nowrap}

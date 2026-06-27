@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
+import * as CONFIG from "./config.js";
 
 // ───────────────────────── setup ─────────────────────────
 const _url = SUPABASE_URL.replace(/\/$/, "");
@@ -89,6 +90,7 @@ const state = {
   log: [],
   view: "calendar",
   cur: { y: today.getFullYear(), m: today.getMonth() },
+  weather: {}, // { "YYYY-MM-DD": wmoCode } from Open-Meteo
 };
 
 function rowToStay(r) {
@@ -264,6 +266,128 @@ function openExportSheet() {
   wrap.querySelector("[data-ics]").onclick = () => { closeModal(); exportIcs(); };
 }
 
+// ───────────────────────── weather (Open-Meteo) ─────────────────────────
+const _rawLat = CONFIG.LAKE_LAT, _rawLon = CONFIG.LAKE_LON;
+const LAKE_LAT = Number(_rawLat);
+const LAKE_LON = Number(_rawLon);
+// Weather is off unless BOTH coordinates are real, in-range numbers. This makes the
+// documented "set to null to turn weather off" work (Number(null) is 0, which would
+// otherwise sneak past a bare isFinite check and fetch weather for the ocean at 0,0),
+// and rejects empty strings, garbage, and out-of-range typos (e.g. a missing decimal).
+const WEATHER_ENABLED =
+  _rawLat != null && _rawLon != null && _rawLat !== "" && _rawLon !== "" &&
+  Number.isFinite(LAKE_LAT) && Number.isFinite(LAKE_LON) &&
+  Math.abs(LAKE_LAT) <= 90 && Math.abs(LAKE_LON) <= 180;
+const WEATHER_CACHE_KEY = "lh_weather_v2";
+const WEATHER_TTL = 3 * 60 * 60 * 1000; // refresh at most every 3 hours
+// Open-Meteo's daily weather_code reports the *most significant* condition of the
+// day, which over-weights brief afternoon showers/storms (a 99%-sunny day with one
+// passing storm gets coded "thunderstorm"). So instead of trusting the raw code, we
+// derive the icon from how sunny the day actually is (sunshine vs daylight) and only
+// show precipitation on genuinely wet days.
+const WX_WET_MM = 2;        // >= this much precip → show the rain/storm/snow icon
+const WX_SUN_CLEAR = 0.65;  // >= this fraction of daylight sunny → sunny icon
+const WX_SUN_PARTLY = 0.35; // >= this → partly sunny; below → cloudy
+
+// Map a WMO weather code to an icon category + human label.
+function wmo(code) {
+  if (code === 0) return { cat: "clear", label: "Clear" };
+  if (code === 1 || code === 2) return { cat: "partly", label: "Partly cloudy" };
+  if (code === 3) return { cat: "cloudy", label: "Overcast" };
+  if (code === 45 || code === 48) return { cat: "fog", label: "Fog" };
+  if (code === 56 || code === 57) return { cat: "sleet", label: "Freezing drizzle" };
+  if (code >= 51 && code <= 55) return { cat: "drizzle", label: "Drizzle" };
+  if ((code >= 61 && code <= 65) || (code >= 80 && code <= 82)) return { cat: "rain", label: "Rain" };
+  if (code === 66 || code === 67) return { cat: "sleet", label: "Freezing rain" };
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return { cat: "snow", label: "Snow" };
+  if (code >= 95) return { cat: "storm", label: "Thunderstorm" };
+  return null;
+}
+
+// Pick the icon for a day from how sunny it really was + how much it actually rained,
+// falling back to the raw code only when sunshine data is missing.
+function deriveDay(code, sunshine, daylight, precip) {
+  const base = wmo(code);
+  const sunPct = (daylight > 0 && sunshine != null) ? sunshine / daylight : null;
+  const wet = precip != null && precip >= WX_WET_MM;
+  const precipCats = ["drizzle", "rain", "sleet", "snow", "storm"];
+  // Genuinely wet day → show the precipitation type from the code.
+  if (base && wet && precipCats.includes(base.cat)) return base;
+  // Any real snowfall reads as snow even if the melt-equivalent is small.
+  if (base && base.cat === "snow" && precip > 0) return base;
+  // Otherwise classify by sunshine.
+  if (sunPct != null) {
+    if (sunPct >= WX_SUN_CLEAR) return { cat: "clear", label: "Sunny" };
+    if (sunPct >= WX_SUN_PARTLY) return { cat: "partly", label: "Partly sunny" };
+    return { cat: "cloudy", label: "Cloudy" };
+  }
+  return base; // no sunshine data — fall back to the code's mapping
+}
+
+const CLOUD = (fill, dy) => `<g fill="${fill}"><circle cx="9" cy="${11 + dy}" r="3.2"/><circle cx="14" cy="${10 + dy}" r="3.7"/><circle cx="13.3" cy="${12.6 + dy}" r="3.2"/><rect x="7.2" y="${11 + dy}" width="9.8" height="3.6" rx="1.8"/></g>`;
+const WEATHER_SVGS = {
+  clear: `<g stroke="#E0A23F" stroke-width="1.7" stroke-linecap="round"><line x1="12" y1="2.5" x2="12" y2="4.8"/><line x1="12" y1="19.2" x2="12" y2="21.5"/><line x1="2.5" y1="12" x2="4.8" y2="12"/><line x1="19.2" y1="12" x2="21.5" y2="12"/><line x1="5" y1="5" x2="6.6" y2="6.6"/><line x1="17.4" y1="17.4" x2="19" y2="19"/><line x1="5" y1="19" x2="6.6" y2="17.4"/><line x1="17.4" y1="6.6" x2="19" y2="5"/></g><circle cx="12" cy="12" r="4.4" fill="#E7B45E"/>`,
+  partly: `<g stroke="#E0A23F" stroke-width="1.4" stroke-linecap="round"><line x1="15.5" y1="2.6" x2="15.5" y2="4.4"/><line x1="20.6" y1="8" x2="22.2" y2="8"/><line x1="19.1" y1="4.4" x2="20.3" y2="3.2"/><line x1="12.2" y1="4.4" x2="11" y2="3.2"/></g><circle cx="15.5" cy="8" r="3" fill="#E7B45E"/>${CLOUD("#9AA3A8", 3.5)}`,
+  cloudy: `${CLOUD("#9AA3A8", 1.5)}`,
+  fog: `${CLOUD("#AEB6BA", -0.5)}<g stroke="#9AA3A8" stroke-width="1.6" stroke-linecap="round"><line x1="5.5" y1="17" x2="16" y2="17"/><line x1="7.5" y1="20" x2="18.5" y2="20"/></g>`,
+  drizzle: `${CLOUD("#9AA3A8", 0)}<g stroke="#5C8AA6" stroke-width="1.5" stroke-linecap="round"><line x1="10" y1="17" x2="9.3" y2="19.2"/><line x1="14" y1="17" x2="13.3" y2="19.2"/></g>`,
+  rain: `${CLOUD("#9AA3A8", 0)}<g stroke="#3F6373" stroke-width="1.7" stroke-linecap="round"><line x1="9" y1="16.6" x2="8" y2="20"/><line x1="12.5" y1="16.6" x2="11.5" y2="20"/><line x1="16" y1="16.6" x2="15" y2="20"/></g>`,
+  sleet: `${CLOUD("#9AA3A8", 0)}<g stroke="#5C8AA6" stroke-width="1.6" stroke-linecap="round"><line x1="10" y1="16.6" x2="9.2" y2="19"/></g><circle cx="14.5" cy="18.3" r="1.1" fill="#6F97AD"/>`,
+  snow: `${CLOUD("#9AA3A8", 0)}<g fill="#7FB0CC"><circle cx="9.5" cy="18" r="1.1"/><circle cx="13" cy="19" r="1.1"/><circle cx="16" cy="17.6" r="1.1"/></g>`,
+  storm: `${CLOUD("#8B939A", -0.5)}<path d="M12.5 13.3l-3 4h2.2l-1 3.6 3.4-4.5h-2.2l1.1-3.1z" fill="#E7B45E"/>`,
+};
+
+function weatherIcon(dateStr, variant) {
+  if (!WEATHER_ENABLED || !dateStr) return "";
+  const w = state.weather[dateStr];
+  if (!w || !WEATHER_SVGS[w.cat]) return "";
+  const cls = variant === "cal" ? "wx wx-cal" : "wx wx-row";
+  return `<span class="${cls}" title="${esc(w.label)}" role="img" aria-label="${esc(w.label)}"><svg viewBox="0 0 24 24">${WEATHER_SVGS[w.cat]}</svg></span>`;
+}
+
+function cacheWeather() {
+  try { localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify({ at: Date.now(), lat: LAKE_LAT, lon: LAKE_LON, days: state.weather })); } catch (e) {}
+}
+function loadWeatherCache() {
+  if (!WEATHER_ENABLED) return;
+  try {
+    const c = JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY) || "null");
+    if (c && c.lat === LAKE_LAT && c.lon === LAKE_LON && c.days) state.weather = c.days;
+  } catch (e) {}
+}
+async function fetchWeather() {
+  if (!WEATHER_ENABLED) return;
+  let lastAt = 0;
+  try {
+    const c = JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY) || "null");
+    if (c && c.lat === LAKE_LAT && c.lon === LAKE_LON) lastAt = c.at || 0;
+  } catch (e) {}
+  if (lastAt && Date.now() - lastAt < WEATHER_TTL) return; // cache still fresh
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAKE_LAT}&longitude=${LAKE_LON}&daily=weather_code,sunshine_duration,daylight_duration,precipitation_sum&timezone=auto&past_days=92&forecast_days=16`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("weather HTTP " + res.status);
+    const data = await res.json();
+    const dy = data.daily || {};
+    const times = dy.time || [];
+    const map = {};
+    for (let i = 0; i < times.length; i++) {
+      const w = deriveDay(
+        dy.weather_code ? dy.weather_code[i] : null,
+        dy.sunshine_duration ? dy.sunshine_duration[i] : null,
+        dy.daylight_duration ? dy.daylight_duration[i] : null,
+        dy.precipitation_sum ? dy.precipitation_sum[i] : null
+      );
+      if (w) map[times[i]] = w;
+    }
+    state.weather = map;
+    cacheWeather();
+    render();
+  } catch (e) {
+    console.error("weather fetch failed", e);
+  }
+}
+
 // ───────────────────────── render ─────────────────────────
 const appEl = document.getElementById("app");
 
@@ -316,7 +440,7 @@ function renderCalendar() {
     }).join("");
     const more = pills.length > 4 ? `<span class="sc-more">+${pills.length - 4} more</span>` : "";
     return `<button class="sc-cell ${ds === todayStr ? "today" : ""}" data-action="day" data-day="${ds}">
-      <div class="sc-dhead"><span class="sc-dnum">${d.getDate()}</span></div>${shown}${more}</button>`;
+      <div class="sc-dhead"><span class="sc-dnum">${d.getDate()}</span>${ds >= todayStr ? weatherIcon(ds, "cal") : ""}</div>${shown}${more}</button>`;
   }).join("");
   return `<div class="sc-cal">
     <div class="sc-navrow">
@@ -341,7 +465,7 @@ function renderListSection(list, isPast) {
     const n = nightsBetween(s.start, s.end);
     out += `<div class="sc-row ${isPast ? "past" : ""}">
       <div class="sc-rmain">
-        <div class="sc-rwhen">${fmtRange(s.start, s.end)}</div>
+        <div class="sc-rwhen">${weatherIcon(s.start, "row")}${fmtRange(s.start, s.end)}</div>
         <div class="sc-rnames">${nameTags(s.names)}</div>
         <div class="sc-rdet">${s.names.length} ${s.names.length === 1 ? "person" : "people"}${n > 0 ? ` \u00b7 ${n} ${n === 1 ? "night" : "nights"}` : " \u00b7 day trip"}${s.bringing ? ` \u00b7 bringing ${esc(s.bringing)}` : ""}</div>
         ${s.note ? `<div class="sc-rdet">${esc(s.note)}</div>` : ""}
@@ -622,8 +746,13 @@ function openStayForm(editing, prefillStart) {
 
 // ───────────────────────── password gate + boot ─────────────────────────
 function boot() {
+  loadWeatherCache();
   render();
   loadAll();
+  fetchWeather();
+  // If we were offline at launch (or the fetch failed), recover when connectivity
+  // returns. fetchWeather is TTL-guarded, so this is a no-op once weather is fresh.
+  window.addEventListener("online", fetchWeather);
   if (sb) {
     sb.channel("rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "stays" }, loadAll)
