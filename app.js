@@ -83,6 +83,7 @@ function colorFor(name) {
 const today = new Date();
 const todayStr = ymd(today);
 let editorName = localStorage.getItem("editorName") || "";
+let recentCollapsed = localStorage.getItem("lh_recent_collapsed") === "1";
 
 const state = {
   config: { appName: "Family Lake House", capacity: 10 },
@@ -101,6 +102,7 @@ function rowToStay(r) {
     names: Array.isArray(r.names) ? r.names : (r.names ? JSON.parse(r.names) : []),
     start: r.start_date, end: r.end_date,
     bringing: r.bringing || "", note: r.note || "", wholeHouse: !!r.whole_house,
+    created: r.created_at || null,
   };
 }
 
@@ -227,6 +229,33 @@ function knownNames() {
     if (k && !seen.has(k)) seen.set(k, n.trim());
   }));
   return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
+const RECENT_DAYS = 28; // "new in the last 4 weeks"
+function daysAgo(iso) {
+  if (!iso) return Infinity;
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return Infinity;
+  return Math.floor((Date.now() - t) / 86400000);
+}
+function relativeWhen(iso) {
+  const d = daysAgo(iso);
+  if (d <= 0) return "today";
+  if (d === 1) return "yesterday";
+  if (d < 7) return `${d} days ago`;
+  const w = Math.floor(d / 7);
+  return w === 1 ? "1 week ago" : `${w} weeks ago`;
+}
+// Stays created within the recent window, newest first.
+function recentStays() {
+  return state.stays
+    .filter((s) => s.created && daysAgo(s.created) <= RECENT_DAYS)
+    .sort((a, b) => new Date(b.created) - new Date(a.created));
+}
+// Who added a given stay, from the audit log's "add" entry (best-effort).
+function addedBy(stayId) {
+  const e = state.log.find((x) => x.stay_id === stayId && (x.action || "").toLowerCase() === "add");
+  return e && e.editor ? e.editor : "";
 }
 
 // ───────────────────────── export ─────────────────────────
@@ -527,6 +556,26 @@ function renderList() {
   return html + `</div>`;
 }
 
+function renderRecentCard() {
+  const list = recentStays();
+  if (!list.length) return "";
+  const head = `<div class="sc-recent-head">
+      <span class="sc-recent-title">Recent bookings<span class="sc-recent-count">${list.length}</span></span>
+      <button class="sc-recent-toggle" data-action="recent-toggle">${recentCollapsed ? "Show" : "Hide"}</button>
+    </div>`;
+  if (recentCollapsed) return `<div class="sc-recent-card collapsed">${head}</div>`;
+  const items = list.map((s) => {
+    const who = addedBy(s.id);
+    const fresh = daysAgo(s.created) <= 2;
+    return `<button class="sc-recent-item" data-action="recent-open" data-id="${s.id}">
+        <div class="ri-top">${fresh ? `<span class="sc-newdot">NEW</span>` : ""}<span class="ri-when">${fmtRange(s.start, s.end)}</span></div>
+        <div class="ri-names">${nameTags(s.names)}</div>
+        <div class="ri-meta">Added ${esc(relativeWhen(s.created))}${who ? ` · ${esc(who)}` : ""}</div>
+      </button>`;
+  }).join("");
+  return `<div class="sc-recent-card">${head}<div class="sc-recent-strip">${items}</div></div>`;
+}
+
 function renderActivity() {
   if (!state.log.length)
     return `<div class="sc-log"><div class="sc-empty">No changes yet. Every add, edit, and delete will show up here with who made it.</div></div>`;
@@ -590,6 +639,7 @@ function render() {
   appEl.innerHTML = `<div class="sc-wrap">
     ${renderHeader()}
     ${configBanner()}
+    ${renderRecentCard()}
     ${renderBar()}
     ${state.view === "calendar" ? renderCalendar() : ""}
     ${state.view === "list" ? renderList() : ""}
@@ -612,6 +662,12 @@ appEl.addEventListener("click", (e) => {
   else if (a === "thismonth") { state.cur = { y: today.getFullYear(), m: today.getMonth() }; render(); }
   else if (a === "day") openDayPanel(btn.dataset.day);
   else if (a === "edit") openStayForm(state.stays.find((s) => s.id === btn.dataset.id), null);
+  else if (a === "recent-open") openStayForm(state.stays.find((s) => s.id === btn.dataset.id), null);
+  else if (a === "recent-toggle") {
+    recentCollapsed = !recentCollapsed;
+    localStorage.setItem("lh_recent_collapsed", recentCollapsed ? "1" : "0");
+    render();
+  }
   else if (a === "delete") { if (confirm("Delete this stay?")) commitDelete(btn.dataset.id); }
   else if (a === "add-supply") { const el = document.getElementById("supitem"); const v = el ? el.value.trim() : ""; if (v) commitSupply(v); }
   else if (a === "toggle-supply") setSupplyDone(btn.dataset.id, btn.dataset.done === "0");
