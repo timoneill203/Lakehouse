@@ -88,6 +88,8 @@ const state = {
   config: { appName: "Family Lake House", capacity: 10 },
   stays: [],
   log: [],
+  supplies: [],
+  suppliesReady: true, // flips false if the `supplies` table isn't set up yet
   view: "calendar",
   cur: { y: today.getFullYear(), m: today.getMonth() },
   weather: {}, // { "YYYY-MM-DD": wmoCode } from Open-Meteo
@@ -102,18 +104,28 @@ function rowToStay(r) {
   };
 }
 
+function rowToSupply(r) {
+  return {
+    id: r.id, item: r.item || "", note: r.note || "", done: !!r.done,
+    flaggedBy: r.flagged_by || "", doneBy: r.done_by || "", created: r.created_at || null,
+  };
+}
+
 // ───────────────────────── data layer ─────────────────────────
 async function loadAll() {
   if (!sb) { render(); return; }
   try {
-    const [{ data: cfg }, { data: stayRows }, { data: logRows }] = await Promise.all([
+    const [{ data: cfg }, { data: stayRows }, { data: logRows }, { data: supplyRows, error: supErr }] = await Promise.all([
       sb.from("config").select("*").eq("id", 1).maybeSingle(),
       sb.from("stays").select("*"),
       sb.from("audit_log").select("*").order("ts", { ascending: false }).limit(250),
+      sb.from("supplies").select("*").order("created_at", { ascending: true }),
     ]);
     if (cfg) state.config = { appName: cfg.app_name, capacity: cfg.capacity };
     state.stays = (stayRows || []).map(rowToStay);
     state.log = logRows || [];
+    state.supplies = (supplyRows || []).map(rowToSupply);
+    state.suppliesReady = !supErr; // false until the `supplies` table exists (see supplies.sql)
   } catch (e) {
     console.error(e);
   }
@@ -175,6 +187,31 @@ async function commitDelete(id) {
     summary: `Deleted ${prev ? prev.names.join(", ") : "stay"} \u00b7 ${prev ? fmtRange(prev.start, prev.end) : ""}`,
     details: { before: prev },
   });
+  await loadAll();
+}
+
+// ───────────────────────── supplies ─────────────────────────
+async function commitSupply(item, note) {
+  const editor = await ensureEditor();
+  if (editor == null) return;
+  if (!sb) { alert("Connect Supabase first (see config.js)."); return; }
+  const { error } = await sb.from("supplies").insert({ item, note: note || "", flagged_by: editor });
+  if (error) { alert("Could not add: " + error.message); return; }
+  await loadAll();
+}
+async function setSupplyDone(id, done) {
+  const editor = await ensureEditor();
+  if (editor == null) return;
+  if (!sb) return;
+  const { error } = await sb.from("supplies")
+    .update({ done, done_by: done ? editor : "", updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) { alert("Could not update: " + error.message); return; }
+  await loadAll();
+}
+async function deleteSupply(id) {
+  if (!sb) return;
+  const { error } = await sb.from("supplies").delete().eq("id", id);
+  if (error) { alert("Could not remove: " + error.message); return; }
   await loadAll();
 }
 
@@ -416,7 +453,7 @@ function renderHeader() {
 function renderBar() {
   const t = (v, label) => `<button class="${state.view === v ? "on" : ""}" data-action="view" data-view="${v}">${label}</button>`;
   return `<div class="sc-bar">
-    <div class="sc-toggle">${t("calendar", "Calendar")}${t("list", "List")}${t("activity", "Activity")}</div>
+    <div class="sc-toggle">${t("calendar", "Calendar")}${t("list", "List")}${t("supplies", "Supplies")}${t("activity", "Activity")}</div>
     <div class="sc-baractions">
       <button class="sc-ghostbtn" data-action="export">Export</button>
       <button class="sc-add" data-action="add">+ Add a stay</button>
@@ -508,6 +545,42 @@ function renderActivity() {
   return `<div class="sc-log">${items}</div>`;
 }
 
+function renderSupplies() {
+  if (!sb)
+    return `<div class="sc-list"><div class="sc-empty">Connect Supabase to use the supply list.</div></div>`;
+  const needed = state.supplies.filter((s) => !s.done);
+  const done = state.supplies.filter((s) => s.done);
+  const setupHint = state.suppliesReady ? "" :
+    `<div class="sc-banner"><b>One setup step.</b> The supply list needs a <code>supplies</code> table. Open <code>supplies.sql</code> from the repo, paste it into Supabase → SQL Editor, and Run — then reload.</div>`;
+
+  const row = (s) => `<div class="sc-suprow ${s.done ? "done" : ""}">
+      <button class="sc-supcheck ${s.done ? "checked" : ""}" data-action="toggle-supply" data-id="${s.id}" data-done="${s.done ? "1" : "0"}" aria-label="${s.done ? "Mark as still needed" : "Mark restocked"}">${s.done ? "✓" : ""}</button>
+      <div class="sc-supmain">
+        <div class="sc-supitem">${esc(s.item)}</div>
+        <div class="sc-supmeta">${s.done ? `restocked by <b>${esc(s.doneBy || "someone")}</b>` : `flagged by <b>${esc(s.flaggedBy || "someone")}</b>`}${s.note ? ` · ${esc(s.note)}` : ""}</div>
+      </div>
+      <button class="sc-mini del" data-action="delete-supply" data-id="${s.id}">Remove</button>
+    </div>`;
+
+  const neededBlock = needed.length
+    ? needed.map(row).join("")
+    : `<div class="sc-empty">Nothing low right now. Flag something above so the next family knows to grab it.</div>`;
+  const doneBlock = done.length
+    ? `<div class="sc-month"><h2>Recently restocked</h2><span class="rule"></span></div>${done.map(row).join("")}`
+    : "";
+
+  return `<div class="sc-list">
+    ${setupHint}
+    <div class="sc-supadd">
+      <input type="text" id="supitem" placeholder="What's running low? e.g. propane, coffee, paper towels">
+      <button class="sc-addbtn" data-action="add-supply">Add</button>
+    </div>
+    <div class="sc-month"><h2>Running low${needed.length ? ` (${needed.length})` : ""}</h2><span class="rule"></span></div>
+    ${neededBlock}
+    ${doneBlock}
+  </div>`;
+}
+
 function configBanner() {
   if (CONFIGURED) return "";
   return `<div class="sc-banner"><b>Almost there.</b> This app isn't connected to a database yet, so nothing will save or sync. Open <code>config.js</code> and paste your Supabase Project URL and anon key, then reload. Setup steps are in <code>README.md</code>.</div>`;
@@ -520,6 +593,7 @@ function render() {
     ${renderBar()}
     ${state.view === "calendar" ? renderCalendar() : ""}
     ${state.view === "list" ? renderList() : ""}
+    ${state.view === "supplies" ? renderSupplies() : ""}
     ${state.view === "activity" ? renderActivity() : ""}
     <div class="sc-foot">Shared with everyone who opens this app \u00b7 each name has its own color \u00b7 \u2605 marks a whole-house stay.</div>
   </div>`;
@@ -539,10 +613,20 @@ appEl.addEventListener("click", (e) => {
   else if (a === "day") openDayPanel(btn.dataset.day);
   else if (a === "edit") openStayForm(state.stays.find((s) => s.id === btn.dataset.id), null);
   else if (a === "delete") { if (confirm("Delete this stay?")) commitDelete(btn.dataset.id); }
+  else if (a === "add-supply") { const el = document.getElementById("supitem"); const v = el ? el.value.trim() : ""; if (v) commitSupply(v); }
+  else if (a === "toggle-supply") setSupplyDone(btn.dataset.id, btn.dataset.done === "0");
+  else if (a === "delete-supply") { if (confirm("Remove this item?")) deleteSupply(btn.dataset.id); }
   else if (a === "change-editor") promptEditor(true);
 });
 appEl.addEventListener("change", (e) => {
   if (e.target.id === "appName") { state.config.appName = e.target.value.trim() || "Family Lake House"; saveConfig(); }
+});
+appEl.addEventListener("keydown", (e) => {
+  if (e.target.id === "supitem" && e.key === "Enter") {
+    e.preventDefault();
+    const v = e.target.value.trim();
+    if (v) commitSupply(v);
+  }
 });
 function shiftMonth(delta) {
   let { y, m } = state.cur;
@@ -758,6 +842,7 @@ function boot() {
       .on("postgres_changes", { event: "*", schema: "public", table: "stays" }, loadAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "audit_log" }, loadAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "config" }, loadAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "supplies" }, loadAll)
       .subscribe();
   }
 }
