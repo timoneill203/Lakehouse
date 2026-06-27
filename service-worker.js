@@ -1,6 +1,6 @@
 // Network-first: deployed changes always show up on reload; cache is only a
 // fallback for when you're offline. Bump CACHE if you ever need a hard reset.
-const CACHE = "lakehouse-v9";
+const CACHE = "lakehouse-v15";
 const SHELL = [
   "./",
   "./index.html",
