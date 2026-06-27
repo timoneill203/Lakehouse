@@ -395,24 +395,6 @@ function renderList() {
   return html + `</div>`;
 }
 
-function renderActivity() {
-  if (!state.log.length)
-    return `<div class="sc-log"><div class="sc-empty">No changes yet. Every add, edit, and delete will show up here with who made it.</div></div>`;
-  const items = state.log.map((e) => {
-    const when = new Date(e.ts).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-    const action = (e.action || "edit").toLowerCase();
-    const label = action === "add" ? "Added" : action === "delete" ? "Deleted" : "Edited";
-    return `<div class="sc-logitem">
-      <span class="sc-badge ${action}">${label}</span>
-      <div class="sc-logmain">
-        <div class="sc-logsum">${esc(e.summary || "")}</div>
-        <div class="sc-logmeta">by <b>${esc(e.editor || "someone")}</b> \u00b7 ${esc(when)}</div>
-      </div>
-    </div>`;
-  }).join("");
-  return `<div class="sc-log">${items}</div>`;
-}
-
 function renderRecentCard() {
   const list = recentStays();
   if (!list.length) return "";
@@ -431,6 +413,24 @@ function renderRecentCard() {
       </button>`;
   }).join("");
   return `<div class="sc-recent-card">${head}<div class="sc-recent-strip">${items}</div></div>`;
+}
+
+function renderActivity() {
+  if (!state.log.length)
+    return `<div class="sc-log"><div class="sc-empty">No changes yet. Every add, edit, and delete will show up here with who made it.</div></div>`;
+  const items = state.log.map((e) => {
+    const when = new Date(e.ts).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const action = (e.action || "edit").toLowerCase();
+    const label = action === "add" ? "Added" : action === "delete" ? "Deleted" : "Edited";
+    return `<div class="sc-logitem">
+      <span class="sc-badge ${action}">${label}</span>
+      <div class="sc-logmain">
+        <div class="sc-logsum">${esc(e.summary || "")}</div>
+        <div class="sc-logmeta">by <b>${esc(e.editor || "someone")}</b> \u00b7 ${esc(when)}</div>
+      </div>
+    </div>`;
+  }).join("");
+  return `<div class="sc-log">${items}</div>`;
 }
 
 function configBanner() {
@@ -464,13 +464,13 @@ appEl.addEventListener("click", (e) => {
   else if (a === "thismonth") { state.cur = { y: today.getFullYear(), m: today.getMonth() }; render(); }
   else if (a === "day") openDayPanel(btn.dataset.day);
   else if (a === "edit") openStayForm(state.stays.find((s) => s.id === btn.dataset.id), null);
-  else if (a === "delete") { if (confirm("Delete this stay?")) commitDelete(btn.dataset.id); }
   else if (a === "recent-open") openStayForm(state.stays.find((s) => s.id === btn.dataset.id), null);
   else if (a === "recent-toggle") {
     recentCollapsed = !recentCollapsed;
     localStorage.setItem("lh_recent_collapsed", recentCollapsed ? "1" : "0");
     render();
   }
+  else if (a === "delete") { if (confirm("Delete this stay?")) commitDelete(btn.dataset.id); }
   else if (a === "change-editor") promptEditor(true);
 });
 appEl.addEventListener("change", (e) => {
